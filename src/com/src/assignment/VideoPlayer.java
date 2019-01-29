@@ -202,7 +202,7 @@ public class VideoPlayer {
 		
 		for(int j=-1; j < 2; j++) {
 			for(int i=-1; i < 2; i++) {
-				if(x+i > -1 && x+i < w && y+j > -1 && y+j < h) {
+				if (x + i > -1 && x + i < w && y + j > -1 && y + j < h) {
 					c = new Color(img.getRGB(x+i,y+j));
 					rsum += c.getRed();
 					gsum += c.getGreen();
@@ -216,7 +216,6 @@ public class VideoPlayer {
 		int r = rsum/count;
 		int g = gsum/count;
 		int b = bsum/count;
-
 		return ((a << 24) + (r << 16) + (g << 8) + b);
 	}
 

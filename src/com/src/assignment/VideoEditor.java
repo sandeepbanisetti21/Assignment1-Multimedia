@@ -3,10 +3,9 @@ package com.src.assignment;
 import java.awt.BorderLayout;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,32 +34,35 @@ public class VideoEditor {
 		if (args.length < 6) {
 			System.out.println("It should be video_path scaling_width scaling_height frame_rate anti_alisasing option");
 		}
+		args = new String[] { "prison_960_540.rgb", "2", "1", "10", "0", "1" };
+		// args = new String[] { "aliasing_960_540.rgb", "1", "1", "10", "0", "0" };
 		VideoEditor videoEditor = new VideoEditor();
 		videoEditor.readArguments(args);
 		videoEditor.loadVideo();
-		videoEditor.resize();
+		if (option == 1) {
+			videoEditor.reAdjustAspectRatio();
+		} else {
+			videoEditor.resize();
+		}
 		videoEditor.playVideo();
-
 	}
 
 	private void loadVideo() {
 		System.out.println("Loading input video");
+		File file = new File(videoFilePath);
 		try {
-			File file = new File(videoFilePath);
-			InputStream inputStream = new FileInputStream(file);
+			RandomAccessFile raf = new RandomAccessFile(file, "r");
+			raf.seek(0);
 			long len = file.length();
+			long noOfFrames = len / (width * height * 3);
 			byte[] bytes = new byte[(int) len];
-			int offset = 0;
-			int numRead = 0;
-			while (offset < bytes.length && (numRead = inputStream.read(bytes, offset, bytes.length - offset)) >= 0) {
-				offset += numRead;
-			}
+			raf.read(bytes);
 			int start = 0;
-			while (start + height * width * 2 < len) {
+			int frameNo = 0;
+			while (frameNo < noOfFrames) {
 				BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 				for (int y = 0; y < height; y++) {
 					for (int x = 0; x < width; x++) {
-						byte a = 0;
 						byte r = bytes[start];
 						byte g = bytes[start + height * width];
 						byte b = bytes[start + height * width * 2];
@@ -69,8 +71,9 @@ public class VideoEditor {
 						img.setRGB(x, y, pix);
 					}
 				}
-				start += height * width * 2; // Skip to the next frame
+				start += height * width * 2;
 				videoList.add(img);
+				frameNo++;
 			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -79,40 +82,77 @@ public class VideoEditor {
 		}
 	}
 
-	private void playVideo() {
-		JFrame frame = new JFrame();
-		JLabel label = new JLabel(new ImageIcon(videoList.get(0)));
-		frame.getContentPane().add(label, BorderLayout.CENTER);
-		frame.pack();
-		frame.setVisible(true);
+	private void reAdjustAspectRatio() {
 
-		System.out.println(videoList.size());
-		for (int i = 1; i < videoList.size(); i++) {
-			label.setIcon(new ImageIcon(videoList.get(i)));
-			try {
-				System.out.println("sleeping");
-				Thread.sleep(1000 / frame_rate); // 10000/30 should be default
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+		int nonLinearWidth = (int) (width * scaling_width);
+		int nonLinearHeight = (int) (height * scaling_height);
+
+		if (scaling_height == scaling_width) {
+			resize();
+		} else {
+			if (scaling_width > scaling_height) {
+				// adjustWidth
+				double centralAspectRatio = ((double) (0.6 * width)) / (double) height;
+				int centralWidth = (int) (nonLinearHeight * centralAspectRatio);
+				int peripheralWidth = (nonLinearWidth - nonLinearHeight) / 2;
+
+				System.out.println("Non linear width: " + nonLinearWidth + "non linear height:" + nonLinearHeight
+						+ "central aspect ratio:" + centralAspectRatio + "central width:" + centralWidth
+						+ "peripheral width:" + peripheralWidth);
+
+				for (int i = 0; i < videoList.size(); i++) {
+					BufferedImage oldImage = videoList.get(i);
+					BufferedImage newImage = new BufferedImage(nonLinearWidth, nonLinearHeight,
+							BufferedImage.TYPE_INT_RGB);
+					for (int y = 0; y < nonLinearHeight; y++) {
+						newImage = nonLinearWidthResize(0, peripheralWidth, (float) (peripheralWidth / (0.2 * width)),
+								scaling_height, oldImage, newImage, y);
+						newImage = nonLinearWidthResize(peripheralWidth, centralWidth,
+								(float) (centralWidth / (0.6 * width)), scaling_height, oldImage, newImage, y);
+						newImage = nonLinearWidthResize(peripheralWidth + centralWidth, peripheralWidth,
+								(float) (peripheralWidth / (0.2 * width)), scaling_height, oldImage, newImage, y);
+					}
+					newvideoList.add(newImage);
+				}
+
+			} else {
+				// adjustHeight
+				System.out.println("adjusting height");
 			}
 		}
 	}
 
+	private BufferedImage nonLinearWidthResize(int xLowerBound, int length, float xScalingFactor, float yScalingFactor,
+			BufferedImage Oldimage, BufferedImage newImage, int yCoordinate) {
+
+		System.out.println("xLowerBound:" + xLowerBound + "length:" + length + "xScalingFactor:" + xScalingFactor
+				+ "yScalingFactor:" + yScalingFactor + "yCoordinate:" + yCoordinate);
+		for (int x = xLowerBound; x < xLowerBound + length; x++) {
+			int actualX = (int) ((float) x / xScalingFactor);
+			int actualY = (int) ((float) yCoordinate / yScalingFactor);
+			System.out.println("actualx:" + actualX + "actualy:" + actualY);
+			int rgb = Oldimage.getRGB(actualX, actualY);
+			if (anti_alisasing) {
+				rgb = avgRGB(actualX, actualY, Oldimage);
+			}
+			newImage.setRGB(x, yCoordinate, rgb);
+		}
+		return newImage;
+	}
+
 	public void resize() {
 		for (int i = 0; i < videoList.size(); i++) {
-			BufferedImage img = videoList.get(i); // Original frame
-			int new_width = (int) (img.getWidth() * scaling_width);
-			int new_height = (int) (img.getHeight() * scaling_height);
-			BufferedImage new_img = new BufferedImage(new_width, new_height, BufferedImage.TYPE_INT_RGB); // New frame
-
-			for (int y = 0; y < new_img.getHeight(); y++) {
-				for (int x = 0; x < new_img.getWidth(); x++) {
-					int x_orig = (int) ((double) x / scaling_width);
-					int y_orig = (int) ((double) y / scaling_height);
-
-					int rgb = img.getRGB(x_orig, y_orig);
+			BufferedImage img = videoList.get(i);
+			int resizedWidth = (int) (img.getWidth() * scaling_width);
+			int resizedHeight = (int) (img.getHeight() * scaling_height);
+			BufferedImage new_img = new BufferedImage(resizedWidth, resizedHeight, BufferedImage.TYPE_INT_RGB);
+			for (int y = 0; y < resizedHeight; y++) {
+				for (int x = 0; x < resizedWidth; x++) {
+					int actualX = (int) ((float) x / scaling_width);
+					int actualY = (int) ((float) y / scaling_height);
+					int rgb = img.getRGB(actualX, actualY);
 					if (anti_alisasing) {
-						rgb = avgRGB(x_orig, y_orig, img);
+						rgb = avgRGB(actualX, actualY, img);
 					}
 					new_img.setRGB(x, y, rgb);
 				}
@@ -122,9 +162,43 @@ public class VideoEditor {
 	}
 
 	public int avgRGB(int x, int y, BufferedImage image) {
-		
+		int height = image.getHeight();
+		int width = image.getWidth();
 
-		return 0;
+		int red = 0;
+		int green = 0;
+		int blue = 0;
+		int count = 0;
+		for (int i = -1; i < 2; i++) {
+			for (int j = -1; j < 2; j++) {
+				if (x + i < width && y + j < height && x + i >= 0 && y + j >= 0) {
+					int clr = image.getRGB(x + i, y + j);
+					red += (clr & 0x00ff0000) >> 16;
+					green += (clr & 0x0000ff00) >> 8;
+					blue += clr & 0x000000ff;
+					count++;
+				}
+			}
+		}
+		return ((0 << 24) + ((red / count) << 16) + ((green / count) << 8) + (blue / count));
+	}
+
+	private void playVideo() {
+		JFrame frame = new JFrame();
+		JLabel label = new JLabel(new ImageIcon(newvideoList.get(0)));
+		frame.getContentPane().add(label, BorderLayout.CENTER);
+		frame.pack();
+		frame.setVisible(true);
+
+		for (int i = 1; i < newvideoList.size(); i++) {
+			label.setIcon(new ImageIcon(newvideoList.get(i)));
+			try {
+				Thread.sleep(1000 / frame_rate); // 10000/30 should be default
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		System.exit(0);
 	}
 
 	private void readArguments(String[] args) {
@@ -135,7 +209,6 @@ public class VideoEditor {
 		frame_rate = Integer.parseInt(args[3]);
 		anti_alisasing = Integer.parseInt(args[4]) == 1 ? true : false;
 		option = Integer.parseInt(args[5]);
-
 	}
 
 }
