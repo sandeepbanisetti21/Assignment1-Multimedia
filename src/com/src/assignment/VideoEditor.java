@@ -34,7 +34,7 @@ public class VideoEditor {
 		if (args.length < 6) {
 			System.out.println("It should be video_path scaling_width scaling_height frame_rate anti_alisasing option");
 		}
-		args = new String[] { "prison_960_540.rgb", "2", "1", "10", "0", "1" };
+		args = new String[] { "prison_960_540.rgb", "1", "2", "10", "0", "1" };
 		// args = new String[] { "aliasing_960_540.rgb", "1", "1", "10", "0", "0" };
 		VideoEditor videoEditor = new VideoEditor();
 		videoEditor.readArguments(args);
@@ -94,7 +94,7 @@ public class VideoEditor {
 				// adjustWidth
 				double centralAspectRatio = ((double) (0.6 * width)) / (double) height;
 				int centralWidth = (int) (nonLinearHeight * centralAspectRatio);
-				int peripheralWidth = (nonLinearWidth - nonLinearHeight) / 2;
+				int peripheralWidth = (nonLinearWidth - centralWidth) / 2;
 
 				System.out.println("Non linear width: " + nonLinearWidth + "non linear height:" + nonLinearHeight
 						+ "central aspect ratio:" + centralAspectRatio + "central width:" + centralWidth
@@ -105,37 +105,92 @@ public class VideoEditor {
 					BufferedImage newImage = new BufferedImage(nonLinearWidth, nonLinearHeight,
 							BufferedImage.TYPE_INT_RGB);
 					for (int y = 0; y < nonLinearHeight; y++) {
-						newImage = nonLinearWidthResize(0, peripheralWidth, (float) (peripheralWidth / (0.2 * width)),
+						newImage = nonLinearWidthResize(0, peripheralWidth, (double) (peripheralWidth / (0.2 * width)),
 								scaling_height, oldImage, newImage, y);
+						BufferedImage center = oldImage.getSubimage((int) (0.2 * width), 0,
+								(int) (0.6 * (double) width), height);
 						newImage = nonLinearWidthResize(peripheralWidth, centralWidth,
-								(float) (centralWidth / (0.6 * width)), scaling_height, oldImage, newImage, y);
+								(double) (centralWidth / (0.6 * width)), scaling_height, center, newImage, y);
+						BufferedImage right = oldImage.getSubimage((int) (0.8 * width), 0, (int) (0.2 * width), height);
 						newImage = nonLinearWidthResize(peripheralWidth + centralWidth, peripheralWidth,
-								(float) (peripheralWidth / (0.2 * width)), scaling_height, oldImage, newImage, y);
+								(double) (peripheralWidth / (0.2 * width)), scaling_height, right, newImage, y);
+					}
+					newvideoList.add(newImage);
+				}
+			} else {
+				// adjustHeight
+				System.out.println("adjusting height");
+				double centralAspectRatio = ((double) width) / (double) (0.6 * height);
+				int centralHeight = (int) ((double) nonLinearWidth / (double) centralAspectRatio);
+				int peripheralHeight = (nonLinearHeight - centralHeight) / 2;
+
+				System.out.println("Non linear width: " + nonLinearWidth + "non linear height:" + nonLinearHeight
+						+ "central aspect ratio:" + centralAspectRatio + "central width:" + centralHeight
+						+ "peripheral width:" + peripheralHeight);
+
+				for (int i = 0; i < videoList.size(); i++) {
+					BufferedImage oldImage = videoList.get(i);
+					BufferedImage newImage = new BufferedImage(nonLinearWidth, nonLinearHeight,
+							BufferedImage.TYPE_INT_RGB);
+					for (int x = 0; x < nonLinearWidth; x++) {
+						newImage = nonLinearHeightResize(0, peripheralHeight,
+								(double) (peripheralHeight / (0.2 * height)), scaling_width, oldImage, newImage, x);
+						BufferedImage center = oldImage.getSubimage(0, (int) (0.2 * height), width,
+								(int) (0.6 * height));
+						newImage = nonLinearHeightResize(peripheralHeight, centralHeight,
+								(double) (centralHeight / (0.6 * height)), scaling_width, center, newImage, x);
+						BufferedImage bottom = oldImage.getSubimage(0, (int) (0.8 * height), width,
+								(int) (0.2 * height));
+						newImage = nonLinearHeightResize(peripheralHeight + centralHeight, peripheralHeight,
+								(double) (peripheralHeight / (0.2 * height)), scaling_width, bottom, newImage, x);
 					}
 					newvideoList.add(newImage);
 				}
 
-			} else {
-				// adjustHeight
-				System.out.println("adjusting height");
 			}
 		}
 	}
 
-	private BufferedImage nonLinearWidthResize(int xLowerBound, int length, float xScalingFactor, float yScalingFactor,
+	private BufferedImage nonLinearWidthResize(int xLowerBound, int length, double xScalingFactor, float yScalingFactor,
 			BufferedImage Oldimage, BufferedImage newImage, int yCoordinate) {
 
-		System.out.println("xLowerBound:" + xLowerBound + "length:" + length + "xScalingFactor:" + xScalingFactor
-				+ "yScalingFactor:" + yScalingFactor + "yCoordinate:" + yCoordinate);
-		for (int x = xLowerBound; x < xLowerBound + length; x++) {
-			int actualX = (int) ((float) x / xScalingFactor);
-			int actualY = (int) ((float) yCoordinate / yScalingFactor);
-			System.out.println("actualx:" + actualX + "actualy:" + actualY);
+		// System.out.println("xLowerBound:" + xLowerBound + "length:" + length +
+		// "xScalingFactor:" + xScalingFactor
+		// + "yScalingFactor:" + yScalingFactor + "yCoordinate:" + yCoordinate);
+		for (int x = 0; x < length; x++) {
+			int actualX = (int) ((double) x / xScalingFactor);
+			int actualY = (int) ((double) yCoordinate / yScalingFactor);
+			if (actualX >= Oldimage.getWidth())
+				continue;
 			int rgb = Oldimage.getRGB(actualX, actualY);
 			if (anti_alisasing) {
 				rgb = avgRGB(actualX, actualY, Oldimage);
 			}
-			newImage.setRGB(x, yCoordinate, rgb);
+			if (x + xLowerBound >= newImage.getWidth() || yCoordinate >= newImage.getHeight())
+				continue;
+			newImage.setRGB(x + xLowerBound, yCoordinate, rgb);
+		}
+		return newImage;
+	}
+
+	private BufferedImage nonLinearHeightResize(int yLowerBound, int length, double yScalingFactor,
+			float xScalingFactor, BufferedImage Oldimage, BufferedImage newImage, int xCoordinate) {
+
+		// System.out.println("xLowerBound:" + xLowerBound + "length:" + length +
+		// "xScalingFactor:" + xScalingFactor
+		// + "yScalingFactor:" + yScalingFactor + "yCoordinate:" + yCoordinate);
+		for (int y = 0; y < length; y++) {
+			int actualX = (int) ((double) xCoordinate / xScalingFactor);
+			int actualY = (int) ((double) y / yScalingFactor);
+			if (actualY >= Oldimage.getHeight())
+				continue;
+			int rgb = Oldimage.getRGB(actualX, actualY);
+			if (anti_alisasing) {
+				rgb = avgRGB(actualX, actualY, Oldimage);
+			}
+			if (y + yLowerBound >= newImage.getHeight() || xCoordinate >= newImage.getWidth())
+				continue;
+			newImage.setRGB(xCoordinate, y + yLowerBound, rgb);
 		}
 		return newImage;
 	}
