@@ -13,6 +13,9 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 
+import com.src.seamcarving.GradientMagnitudeFunction;
+import com.src.seamcarving.ImageRetarget;
+
 public class VideoEditor {
 
 	public final static int width = 960;
@@ -34,13 +37,16 @@ public class VideoEditor {
 		if (args.length < 6) {
 			System.out.println("It should be video_path scaling_width scaling_height frame_rate anti_alisasing option");
 		}
-		args = new String[] { "prison_960_540.rgb", "1", "2", "10", "0", "1" };
+		args = new String[] { "prison_960_540.rgb", "0.5", "0.5", "10", "0", "2" };
 		// args = new String[] { "aliasing_960_540.rgb", "1", "1", "10", "0", "0" };
 		VideoEditor videoEditor = new VideoEditor();
 		videoEditor.readArguments(args);
 		videoEditor.loadVideo();
 		if (option == 1) {
 			videoEditor.reAdjustAspectRatio();
+		} else if (option == 2) {
+			videoEditor.seamCarving();
+
 		} else {
 			videoEditor.resize();
 		}
@@ -236,6 +242,18 @@ public class VideoEditor {
 			}
 		}
 		return ((0 << 24) + ((red / count) << 16) + ((green / count) << 8) + (blue / count));
+	}
+
+	private void seamCarving() {
+		System.out.println("Seam carving");
+		ImageRetarget ir = new ImageRetarget(new GradientMagnitudeFunction());
+		int new_width = (int) (width * scaling_width);
+		int new_height = (int) (height * scaling_height);
+		for (int i = 0; i < videoList.size(); i++) {
+			System.out.println(i);
+			BufferedImage result = ir.retarget(videoList.get(i), new_width, new_height);
+			newvideoList.add(result);
+		}
 	}
 
 	private void playVideo() {
